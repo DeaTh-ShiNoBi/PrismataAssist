@@ -122,30 +122,40 @@ main = do
 -- Game logic - data types and pure functions
 -------------------------------------------------------------------------------
 
-newtype Gold = Gold Int
+newtype Gold
+  = Gold { unGold :: Int }
   deriving (Show, Ord, Eq, Num)
 
-newtype Green = Green Int
+newtype Green 
+  = Green { unGreen :: Int }
   deriving (Show, Ord, Eq, Num)
 
-newtype Red = Red Int
+newtype Red 
+  = Red { unRed :: Int }
   deriving (Show, Ord, Eq, Num)
 
-newtype Blue = Blue Int
+newtype Blue
+  = Blue { unBlue :: Int }
   deriving (Show, Ord, Eq, Num)
 
-newtype Energy = Energy Int
+newtype Energy
+  = Energy { unEnergy :: Int }
   deriving (Show, Ord, Eq, Num)
-
 
 data GameState = GameState
-  { gameGold :: Gold
+  { gameTurn :: Int
+  , gameGold :: Gold
   , gameNumDrones :: Int
   , gameGreen :: Green
+  , gameGreenRate :: Green
   , gameBlue :: Blue
+  , gameBlueRate :: Blue
   , gameRed :: Red
+  , gameRedRate :: Red
   , gameEnergy :: Energy
+  , gameNumEngineers :: Int
   , gameDronesBuilding :: Int
+  , gameNumConduits :: Int
   } deriving Show
 
 data Unit
@@ -154,6 +164,12 @@ data Unit
   | Conduit
   | Drone
   | Engineer
+  | Forcefield
+  | GaussCannon
+  | Rhino
+  | SteelSplitter
+  | Tarsier
+  | Wall
   deriving (Show, Eq)
 
 unitGoldCost :: Unit -> Gold
@@ -163,6 +179,12 @@ unitGoldCost = \case
   Conduit -> 4
   Drone -> 3
   Engineer -> 2
+  Forcefield -> 1
+  GaussCannon -> 6
+  Rhino -> 5
+  SteelSplitter -> 6
+  Tarsier -> 4
+  Wall -> 5
 
 unitGreenCost :: Unit -> Green
 unitGreenCost = \case
@@ -171,6 +193,12 @@ unitGreenCost = \case
   Conduit -> 0
   Drone -> 0
   Engineer -> 0
+  Forcefield -> 1
+  GaussCannon -> 1
+  Rhino -> 0
+  SteelSplitter -> 0
+  Tarsier -> 0
+  Wall -> 0
 
 unitBlueCost :: Unit -> Blue
 unitBlueCost  = \case
@@ -179,6 +207,12 @@ unitBlueCost  = \case
   Conduit -> 0
   Drone -> 0
   Engineer -> 0
+  Forcefield -> 0
+  GaussCannon -> 0
+  Rhino -> 0
+  SteelSplitter -> 1
+  Tarsier -> 0
+  Wall -> 1
 
 unitRedCost :: Unit -> Red
 unitRedCost = \case
@@ -187,6 +221,12 @@ unitRedCost = \case
   Conduit -> 0
   Drone -> 0
   Engineer -> 0
+  Forcefield -> 0
+  GaussCannon -> 0
+  Rhino -> 1
+  SteelSplitter -> 0
+  Tarsier -> 1
+  Wall -> 0
 
 unitEnergyCost :: Unit -> Energy
 unitEnergyCost = \case
@@ -195,14 +235,35 @@ unitEnergyCost = \case
   Conduit -> 0
   Drone -> 1
   Engineer -> 0
+  Forcefield -> 0
+  GaussCannon -> 0
+  Rhino -> 0
+  SteelSplitter -> 0
+  Tarsier -> 0
+  Wall -> 0
 
-canBuyUnit :: Unit -> Gold -> Green -> Blue -> Red -> Energy -> Bool
-canBuyUnit x g gr b r e = and
+unitDroneCost :: Unit -> Int
+unitDroneCost = \case
+  Animus -> 0
+  Blastforge -> 0
+  Conduit -> 0
+  Drone -> 0
+  Engineer -> 0
+  Forcefield -> 1
+  GaussCannon -> 0
+  Rhino -> 0
+  SteelSplitter -> 0
+  Tarsier -> 0
+  Wall -> 0
+
+canBuyUnit :: Unit -> Gold -> Green -> Blue -> Red -> Energy -> Int -> Bool
+canBuyUnit x g gr b r e d = and
   [ g >= unitGoldCost x
   , gr >= unitGreenCost x
   , b >= unitBlueCost x
   , r >= unitRedCost x
   , e >= unitEnergyCost x
+  , d >= unitDroneCost x
   ]
 
 unitGoldRate :: Unit -> Int
@@ -212,30 +273,59 @@ unitGoldRate = \case
   Conduit -> 0
   Drone -> 1
   Engineer -> 0
+  Forcefield -> 0
+  GaussCannon -> 0
+  Rhino -> 0
+  SteelSplitter -> 0
+  Tarsier -> 0
+  Wall -> 0
 
-unitGreenRate :: Unit -> Int
+unitGreenRate :: Unit -> Green
 unitGreenRate = \case
   Animus -> 0
   Blastforge -> 0
   Conduit -> 1
   Drone -> 0
   Engineer -> 0
+  Forcefield -> 0
+  GaussCannon -> 0
+  Rhino -> 0
+  SteelSplitter -> 0
+  Tarsier -> 0
+  Wall -> 0
 
-unitBlueRate :: Unit -> Int
+unitBlueRate :: Unit -> Blue
 unitBlueRate = \case
   Animus -> 0
   Blastforge -> 1
   Conduit -> 0
   Drone -> 0
   Engineer -> 0
+  Forcefield -> 0
+  GaussCannon -> 0
+  Rhino -> 0
+  SteelSplitter -> 0
+  Tarsier -> 0
+  Wall -> 0
 
-unitRedRate :: Unit -> Int
+unitRedRate :: Unit -> Red
 unitRedRate = \case
   Animus -> 1
   Blastforge -> 0
   Conduit -> 0
   Drone -> 0
   Engineer -> 0
+  Forcefield -> 0
+  GaussCannon -> 0
+  Rhino -> 0
+  SteelSplitter -> 0
+  Tarsier -> 0
+  Wall -> 0
+
+tail1 :: [a] -> [a]
+tail1 [] = []
+tail1 [x] = [x]
+tail1 (_:xs) = xs
 
 -------------------------------------------------------------------------------
 -- Game logic - network
@@ -265,29 +355,44 @@ prismataAssist eInput = mdo
           'c' -> Just Conduit
           'd' -> Just Drone
           'e' -> Just Engineer
+          'f' -> Just Forcefield
+          'g' -> Just GaussCannon
+          'r' -> Just Rhino
+          's' -> Just SteelSplitter
+          't' -> Just Tarsier
+          'w' -> Just Wall
           _ -> Nothing
 
     bCanBuy :: Behavior (Unit -> Bool)
     bCanBuy =
-      pure (\gold green blue red energy unit -> 
-        canBuyUnit unit gold green blue red energy)
+      pure (\gold green blue red energy drones unit -> 
+        canBuyUnit unit gold green blue red energy drones)
       <*> bGold
       <*> bGreen
       <*> bBlue
       <*> bRed
       <*> bEnergy
+      <*> bNumDrones
 
     -- (<$) ::          a -> Event b -> Event a
     -- (<@) :: Behavior a -> Event b -> Event a
 
   let 
     undo :: (GameState -> a) -> Event (b -> a)
-    undo f = (\gs _ -> f gs) <$> bLastGameState <@ eUndoTurn
+    undo f = (\(gs:_) _ -> f gs) <$> bHistory <@ eUndoTurn
+
+  bTurn :: Behavior Int <-
+    accumB 1
+      (unions
+        [ (+1) <$ eNextTurn
+        , undo gameTurn
+        ])
 
   bNumDrones :: Behavior Int <-
     accumB 6 
       (unions
         [ (+) <$> bDronesBuilding <@ eNextTurn
+        , (\u d -> d - unitDroneCost u) <$> eBuyUnit
         , undo gameNumDrones
         ])
 
@@ -309,60 +414,75 @@ prismataAssist eInput = mdo
         , undo gameGold
         ])
 
-  bGreen :: Behavior Green <- do
-    bGreenRate :: Behavior Int <-
-      accumB 0 
-        (unions
-          [ (\u gr -> gr + unitGreenRate u) <$> eBuyUnit
-          ])
+  bGreenRate :: Behavior Green <-
+    accumB 0 
+      (unions
+        [ (\u gr -> gr + unitGreenRate u) <$> eBuyUnit
+        , undo gameGreenRate
+        ])
 
+  bGreen :: Behavior Green <- 
     accumB 0
       (unions
-        [ (\x y -> Green x + y) <$> bGreenRate <@ eNextTurn
+        [ (+) <$> bGreenRate <@ eNextTurn
         , (\u gr -> gr - unitGreenCost u) <$> eBuyUnit
         , undo gameGreen
         ])
 
-  bBlue :: Behavior Blue <- do
-    bBlueRate :: Behavior Int <-
-      accumB 0 
-        (unions
-          [ (\u b -> b + unitBlueRate u) <$> eBuyUnit
-          ])
+  bBlueRate :: Behavior Blue <-
+    accumB 0 
+      (unions
+        [ (\u b -> b + unitBlueRate u) <$> eBuyUnit
+        , undo gameBlueRate
+        ])
         
+  bBlue :: Behavior Blue <- 
     accumB 0
       (unions
-        [ (\n _ -> Blue n) <$> bBlueRate <@ eNextTurn
+        [ (\n _ -> n) <$> bBlueRate <@ eNextTurn
         , (\u b -> b - unitBlueCost u) <$> eBuyUnit
         , undo gameBlue
         ])
 
-  bRed :: Behavior Red <- do
-    bRedRate :: Behavior Int <-
-      accumB 0 
-        (unions
-          [ (\u r -> r + unitRedRate u) <$> eBuyUnit
-          ])
+  bRedRate :: Behavior Red <-
+    accumB 0 
+      (unions
+        [ (\u r -> r + unitRedRate u) <$> eBuyUnit
+        , undo gameRedRate
+        ])
         
+  bRed :: Behavior Red <- 
     accumB 0
       (unions
-        [ (\n _ -> Red n * 2) <$> bRedRate <@ eNextTurn
+        [ (\n _ -> n * 2) <$> bRedRate <@ eNextTurn
         , (\u r -> r - unitRedCost u) <$> eBuyUnit
         , undo gameRed
         ])
 
-  bEnergy :: Behavior Energy <- do
-    bNumEngineers :: Behavior Int <- 
-      accumB 2
-        (unions
-          [ (+1) <$ filterE (==Engineer) eBuyUnit
-          ])
+  let
+    bEnergyRate :: Behavior Energy 
+    bEnergyRate = Energy <$> bNumEngineers
 
+  bEnergy :: Behavior Energy <- 
     accumB 2 
       (unions
-        [ (\n _ -> Energy n) <$> bNumEngineers <@ eNextTurn
+        [ (\n _ -> n) <$> bEnergyRate <@ eNextTurn
         , (\u e -> e - unitEnergyCost u) <$> eBuyUnit
         , undo gameEnergy
+        ])
+
+  bNumEngineers :: Behavior Int <-
+    accumB 2
+      (unions
+        [ (+1) <$ filterE (==Engineer) eBuyUnit
+        , undo gameNumEngineers
+        ])
+
+  bNumConduits :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (+1) <$ filterE (==Conduit) eBuyUnit
+        , undo gameNumConduits
         ])
 
   {-
@@ -389,21 +509,32 @@ prismataAssist eInput = mdo
   --                        ^
 
   -- Time-varying entire game state
-  bLastGameState :: Behavior GameState <- do
-    gs <- valueBLater bGameState
-    stepper gs (bGameState <@ eNextTurn2)
+  bHistory :: Behavior [GameState] <- do
+    gs0 <- valueBLater bGameState
+    accumB [gs0] 
+      (unions
+        [ (:) <$> bGameState <@ eNextTurn2
+        , tail1 <$ eUndoTurn
+        ])
+    -- stepper gs (bGameState <@ eNextTurn2)
     -- (valueB bGameState0) >>= (flip stepper (bGameState <@ eNextTurn))
 
   let
     bGameState :: Behavior GameState
     bGameState = pure GameState 
-                   <*> bGold 
-                   <*> bNumDrones 
-                   <*> bGreen
-                   <*> bBlue
-                   <*> bRed
-                   <*> bEnergy
-                   <*> bDronesBuilding
+                  <*> bTurn
+                  <*> bGold 
+                  <*> bNumDrones 
+                  <*> bGreen
+                  <*> bGreenRate
+                  <*> bBlue
+                  <*> bBlueRate
+                  <*> bRed
+                  <*> bRedRate
+                  <*> bEnergy
+                  <*> bNumEngineers
+                  <*> bDronesBuilding
+                  <*> bNumConduits
 
   reactimate (fireNextTurn2 <$> eNextTurn)
 
@@ -425,25 +556,39 @@ prismataAssist eInput = mdo
 
 renderGame :: GameState -> Vty.Image
 renderGame gs = 
-  str ("Drones: " ++ show (gameNumDrones gs)
-                  ++ if gameDronesBuilding gs > 0
+  str ("[[ Turn " ++ show (gameTurn gs) ++ " ]]")
+  +-+
+  str ""
+  +-+ 
+  str "Gold: " +|+ bstr (show (unGold (gameGold gs)))
+  +-+ 
+  str "Green: " +|+ bstr (show (unGreen (gameGreen gs)))
+  +-+ 
+  str "Blue: " +|+ bstr (show (unBlue (gameBlue gs)))
+  +-+ 
+  str "Red: " +|+ bstr (show (unRed (gameRed gs)))
+  +-+ 
+  str "Energy: " +|+ bstr (show (unEnergy (gameEnergy gs)))
+  +-+
+  str ""
+  +-+
+  str "Drones: " +|+ bstr (show (gameNumDrones gs))
+                 +|+ str (if gameDronesBuilding gs > 0
                     then
                       " (+"
                       ++ show (gameDronesBuilding gs)
                       ++ ")"
                     else "")
-  +-+ 
-  str ("Gold: " ++ show (gameGold gs))
-  +-+ 
-  str ("Green: " ++ show (gameGreen gs))
-  +-+ 
-  str ("Blue: " ++ show (gameBlue gs))
-  +-+ 
-  str ("Red: " ++ show (gameRed gs))
-  +-+ 
-  str ("Energy: " ++ show (gameEnergy gs))
+  +-+
+  str "Engineers: " +|+ bstr (show (gameNumEngineers gs))
+  +-+
+  str "Conduits: " +|+ bstr (show (gameNumConduits gs))
  where
+  str :: String -> Vty.Image
   str = Vty.string Vty.defAttr
+
+  bstr :: String -> Vty.Image
+  bstr = Vty.string (Vty.withStyle Vty.defAttr Vty.bold)
 
 (+-+) :: Vty.Image -> Vty.Image -> Vty.Image
 (+-+) = (Vty.<->)
