@@ -1,5 +1,6 @@
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language ScopedTypeVariables #-}
+{-# language RecordWildCards #-}
 {-# language RecursiveDo #-}
 {-# language LambdaCase #-}
 
@@ -8,6 +9,7 @@ module Main where
 import Reactive.Banana
 import Reactive.Banana.Frameworks
 -- import System.IO
+import Graphics.Vty (emptyImage)
 import qualified Graphics.Vty as Vty
 
 -------------------------------------------------------------------------------
@@ -16,23 +18,23 @@ import qualified Graphics.Vty as Vty
 
 main :: IO ()
 main = do
-  vty <- Vty.mkVty =<< Vty.standardIOConfig 
-  
+  vty <- Vty.mkVty =<< Vty.standardIOConfig
+
   -- Create inputs to network
   -- 1. Key presses
-  -- 
-  (charAddHandler, fireChar) :: (AddHandler Char, Char -> IO ()) <- 
-    newAddHandler 
+  --
+  (charAddHandler, fireChar) :: (AddHandler Char, Char -> IO ()) <-
+    newAddHandler
 
-  network :: EventNetwork <- 
+  network :: EventNetwork <-
     compile $ mdo
-      eInput :: Event Char <- 
+      eInput :: Event Char <-
         fromAddHandler charAddHandler
 
 
       -- eNextTurn' :: Event () <- mapEventIO pure eNextTurn
-      
-      
+
+
       {-
                           | Game  | Game' |
       | d |               | Enter | ()    |
@@ -47,8 +49,8 @@ main = do
       -- have :: Behavior Gold
       -- want :: Behavior (String -> Gold)
       --
-      -- changes :: Behavior a -> MomentIO (Event (Future a)) 
-      eFutureGameState :: Event (Future GameState) <- 
+      -- changes :: Behavior a -> MomentIO (Event (Future a))
+      eFutureGameState :: Event (Future GameState) <-
         changes bGameState
       -- imposeChanges :: Behavior a -> Event () -> Behavior a
       --
@@ -59,16 +61,16 @@ main = do
       -- let
       --   eGold :: Event Gold
       --   eGold = apply ((\gold _ -> gold) <$> bGold) eInput
- 
+
       -- Outputs go down here
       -- valueB :: MonadMoment m => Behavior a -> m a
       state0 :: GameState <- valueB bGameState
       liftIO ((Vty.update vty . Vty.picForImage . renderGame) state0)
 
       -- reactimate' :: Event (Future (IO ())) -> MomentIO ()
-      reactimate' 
-        ((fmap . fmap) 
-          (Vty.update vty . Vty.picForImage . renderGame) 
+      reactimate'
+        ((fmap . fmap)
+          (Vty.update vty . Vty.picForImage . renderGame)
           eFutureGameState)
       -- we have: Event [Char]
       -- we want: Event (IO ())
@@ -80,7 +82,7 @@ main = do
       --
       -- fmap :: (f a -> f b) -> (g (f a) -> g (f a))
 
-      -- fmap.fmap.fmap :: (a -> b) -> (f (g (h a 
+      -- fmap.fmap.fmap :: (a -> b) -> (f (g (h a
 
 
   actuate network
@@ -95,7 +97,7 @@ main = do
           Vty.EvKey (Vty.KChar c) _ ->
             case c of
               'q' -> pure ()
-              _ -> do 
+              _ -> do
                 fireChar c
                 loop
           Vty.EvKey Vty.KEnter _ -> do
@@ -107,14 +109,14 @@ main = do
   Vty.shutdown vty
 
   -- Define network
-  -- fromAddHandler :: AddHandler a -> MomentIO (Event a) 
+  -- fromAddHandler :: AddHandler a -> MomentIO (Event a)
   -- compile :: MomentIO () -> IO EventNetwork
   --
   -- reactimate :: Event (IO ()) -> MomentIO ()
   -- actuate :: EventNetwork -> IO ()
 
   -- Actuate network
- 
+
   -- Feed inputs into network
   -- (Listen for key presses)
 
@@ -126,11 +128,11 @@ newtype Gold
   = Gold { unGold :: Int }
   deriving (Show, Ord, Eq, Num)
 
-newtype Green 
+newtype Green
   = Green { unGreen :: Int }
   deriving (Show, Ord, Eq, Num)
 
-newtype Red 
+newtype Red
   = Red { unRed :: Int }
   deriving (Show, Ord, Eq, Num)
 
@@ -145,7 +147,6 @@ newtype Energy
 data GameState = GameState
   { gameTurn :: Int
   , gameGold :: Gold
-  , gameNumDrones :: Int
   , gameGreen :: Green
   , gameGreenRate :: Green
   , gameBlue :: Blue
@@ -153,9 +154,28 @@ data GameState = GameState
   , gameRed :: Red
   , gameRedRate :: Red
   , gameEnergy :: Energy
+  , gameNumDrones :: Int
   , gameNumEngineers :: Int
-  , gameDronesBuilding :: Int
   , gameNumConduits :: Int
+  , gameNumBlastforges :: Int
+  , gameNumAnimus :: Int
+  , gameNumForcefields :: Int
+  , gameNumGaussCannons :: Int
+  , gameNumWalls :: Int
+  , gameNumSteelSplitters :: Int
+  , gameNumTarsiers :: Int
+  , gameNumRhinos :: Int
+  , gameDronesBuilding :: Int
+  , gameEngineersBuilding :: Int
+  , gameConduitsBuilding :: Int
+  , gameBlastforgesBuilding :: Int
+  , gameAnimusBuilding :: Int
+  , gameForcefieldsBuilding :: Int
+  , gameGaussCannonsBuilding :: Int
+  , gameWallsBuilding :: Int
+  , gameSteelSplittersBuilding :: Int
+  , gameTarsiersBuilding :: Int
+  , gameRhinosBuilding :: Int
   } deriving Show
 
 data Unit
@@ -334,17 +354,19 @@ tail1 (_:xs) = xs
 prismataAssist :: Event Char -> MomentIO (Behavior GameState)
 prismataAssist eInput = mdo
   -- Logic goes here
-  -- filterE :: (a -> Bool) -> Event a -> Event a 
-  (eNextTurn2 :: Event (), fireNextTurn2 :: () -> IO ()) <- 
+  -- filterE :: (a -> Bool) -> Event a -> Event a
+  (eNextTurn2 :: Event (), fireNextTurn2 :: () -> IO ()) <-
     newEvent
 
   let
     eNextTurn :: Event ()
     eNextTurn = () <$ filterE (== '\n') eInput
 
+  let
     eUndoTurn :: Event ()
     eUndoTurn = () <$ filterE (== 'u') eInput
 
+  let
     eBuyUnit :: Event Unit
     eBuyUnit = filterApply bCanBuy (filterJust (charToUnit <$> eInput))
       where
@@ -363,9 +385,48 @@ prismataAssist eInput = mdo
           'w' -> Just Wall
           _ -> Nothing
 
+  let
+    eBuyDrone :: Event Unit
+    eBuyDrone = filterE (== Drone) eBuyUnit
+
+    eBuyEngineer :: Event Unit
+    eBuyEngineer = filterE (== Engineer) eBuyUnit
+
+    eBuyConduit :: Event Unit
+    eBuyConduit = filterE (== Conduit) eBuyUnit
+
+    eBuyBlastforge :: Event Unit
+    eBuyBlastforge = filterE (== Blastforge) eBuyUnit
+
+    eBuyAnimus :: Event Unit
+    eBuyAnimus = filterE (== Animus) eBuyUnit
+
+    eBuyForcefield :: Event Unit
+    eBuyForcefield = filterE (== Forcefield) eBuyUnit
+
+    eBuyGaussCannon :: Event Unit
+    eBuyGaussCannon = filterE (== GaussCannon) eBuyUnit
+
+    eBuyWall :: Event Unit
+    eBuyWall = filterE (== Wall) eBuyUnit
+
+    eBuySteelSplitter :: Event Unit
+    eBuySteelSplitter = filterE (== SteelSplitter) eBuyUnit
+
+    eBuyTarsier :: Event Unit
+    eBuyTarsier = filterE (== Tarsier) eBuyUnit
+
+    eBuyRhino :: Event Unit
+    eBuyRhino = filterE (== Rhino) eBuyUnit
+
+  -----------------------------------------------------------------------------
+  -- Behaviors
+  -----------------------------------------------------------------------------
+
+  let
     bCanBuy :: Behavior (Unit -> Bool)
     bCanBuy =
-      pure (\gold green blue red energy drones unit -> 
+      pure (\gold green blue red energy drones unit ->
         canBuyUnit unit gold green blue red energy drones)
       <*> bGold
       <*> bGreen
@@ -374,10 +435,11 @@ prismataAssist eInput = mdo
       <*> bEnergy
       <*> bNumDrones
 
+
     -- (<$) ::          a -> Event b -> Event a
     -- (<@) :: Behavior a -> Event b -> Event a
 
-  let 
+  let
     undo :: (GameState -> a) -> Event (b -> a)
     undo f = (\(gs:_) _ -> f gs) <$> bHistory <@ eUndoTurn
 
@@ -388,25 +450,9 @@ prismataAssist eInput = mdo
         , undo gameTurn
         ])
 
-  bNumDrones :: Behavior Int <-
-    accumB 6 
-      (unions
-        [ (+) <$> bDronesBuilding <@ eNextTurn
-        , (\u d -> d - unitDroneCost u) <$> eBuyUnit
-        , undo gameNumDrones
-        ])
-
-  bDronesBuilding :: Behavior Int <- 
-    accumB 0
-      (unions
-        [ (\_ -> 0) <$ eNextTurn
-        , (\u g -> g + unitGoldRate u) <$> eBuyUnit
-        , undo gameDronesBuilding
-        ])
-
   -- accumB :: Gold -> Event (Gold -> Gold) -> Moment (Behavior Gold)
   bGold :: Behavior Gold <-
-    accumB 6 
+    accumB 6
       (unions
         [ (\x y z -> Gold (x + y) + z) <$> bNumDrones <*> bDronesBuilding
                                 <@ eNextTurn
@@ -415,13 +461,13 @@ prismataAssist eInput = mdo
         ])
 
   bGreenRate :: Behavior Green <-
-    accumB 0 
+    accumB 0
       (unions
         [ (\u gr -> gr + unitGreenRate u) <$> eBuyUnit
         , undo gameGreenRate
         ])
 
-  bGreen :: Behavior Green <- 
+  bGreen :: Behavior Green <-
     accumB 0
       (unions
         [ (+) <$> bGreenRate <@ eNextTurn
@@ -430,13 +476,13 @@ prismataAssist eInput = mdo
         ])
 
   bBlueRate :: Behavior Blue <-
-    accumB 0 
+    accumB 0
       (unions
         [ (\u b -> b + unitBlueRate u) <$> eBuyUnit
         , undo gameBlueRate
         ])
-        
-  bBlue :: Behavior Blue <- 
+
+  bBlue :: Behavior Blue <-
     accumB 0
       (unions
         [ (\n _ -> n) <$> bBlueRate <@ eNextTurn
@@ -445,13 +491,13 @@ prismataAssist eInput = mdo
         ])
 
   bRedRate :: Behavior Red <-
-    accumB 0 
+    accumB 0
       (unions
         [ (\u r -> r + unitRedRate u) <$> eBuyUnit
         , undo gameRedRate
         ])
-        
-  bRed :: Behavior Red <- 
+
+  bRed :: Behavior Red <-
     accumB 0
       (unions
         [ (\n _ -> n * 2) <$> bRedRate <@ eNextTurn
@@ -460,71 +506,197 @@ prismataAssist eInput = mdo
         ])
 
   let
-    bEnergyRate :: Behavior Energy 
+    bEnergyRate :: Behavior Energy
     bEnergyRate = Energy <$> bNumEngineers
 
-  bEnergy :: Behavior Energy <- 
-    accumB 2 
+  bEnergy :: Behavior Energy <-
+    accumB 2
       (unions
         [ (\n _ -> n) <$> bEnergyRate <@ eNextTurn
         , (\u e -> e - unitEnergyCost u) <$> eBuyUnit
         , undo gameEnergy
         ])
 
+  bNumDrones :: Behavior Int <-
+    accumB 6
+      (unions
+        [ (+) <$> bDronesBuilding <@ eNextTurn
+        , (\u d -> d - unitDroneCost u) <$> eBuyUnit
+        , undo gameNumDrones
+        ])
+
+  bDronesBuilding :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (\_ -> 0) <$ eNextTurn
+        , (+1) <$ eBuyDrone
+        , undo gameDronesBuilding
+        ])
+
   bNumEngineers :: Behavior Int <-
     accumB 2
       (unions
-        [ (+1) <$ filterE (==Engineer) eBuyUnit
+        [ (+) <$> bEngineersBuilding <@ eNextTurn
         , undo gameNumEngineers
+        ])
+
+  bEngineersBuilding :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (\_ -> 0) <$ eNextTurn
+        , (+1) <$ eBuyEngineer
+        , undo gameEngineersBuilding
         ])
 
   bNumConduits :: Behavior Int <-
     accumB 0
       (unions
-        [ (+1) <$ filterE (==Conduit) eBuyUnit
+        [ (+) <$> bConduitsBuilding <@ eNextTurn
         , undo gameNumConduits
         ])
 
-  {-
-  eFoo
-  bBar
-  bBaz
-       f                            :: Bar -> Baz -> Foo -> Whatever
-  pure f                            :: Behavior (Bar -> Baz -> Foo -> Whatever)
-  pure f <*> bBar                   :: Behavior (Baz -> Foo -> Whatever)
-  pure f <*> bBar <*> bBaz          :: Behavior (Foo -> Whatever)
-  pure f <*> bBar <*> bBaz <@> eFoo :: Event Whatever
-  -}
+  bConduitsBuilding :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (\_ -> 0) <$ eNextTurn
+        , (+1) <$ eBuyConduit
+        , undo gameConduitsBuilding
+        ])
 
+  bNumBlastforges :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (+) <$> bBlastforgesBuilding <@ eNextTurn
+        , undo gameNumBlastforges
+        ])
 
-  --                        *----------
-  --
-  --
-  --            ------------*
-  --
-  --
-  -- -----------*
-  --
-  --                        ^               ^
-  --                        ^
+  bBlastforgesBuilding :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (\_ -> 0) <$ eNextTurn
+        , (+1) <$ eBuyBlastforge
+        , undo gameBlastforgesBuilding
+        ])
+
+  bNumAnimus :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (+) <$> bAnimusBuilding <@ eNextTurn
+        , undo gameNumAnimus
+        ])
+
+  bAnimusBuilding :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (\_ -> 0) <$ eNextTurn
+        , (+1) <$ eBuyAnimus
+        , undo gameAnimusBuilding
+        ])
+
+  bNumForcefields :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (+) <$> bForcefieldsBuilding <@ eNextTurn
+        , undo gameNumForcefields
+        ])
+
+  bForcefieldsBuilding :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (\_ -> 0) <$ eNextTurn
+        , (+1) <$ eBuyForcefield
+        , undo gameForcefieldsBuilding
+        ])
+
+  bNumGaussCannons :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (+) <$> bGaussCannonsBuilding <@ eNextTurn
+        , undo gameNumGaussCannons
+        ])
+
+  bGaussCannonsBuilding :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (\_ -> 0) <$ eNextTurn
+        , (+1) <$ eBuyGaussCannon
+        , undo gameGaussCannonsBuilding
+        ])
+
+  bNumWalls :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (+) <$> bWallsBuilding <@ eNextTurn
+        , undo gameNumWalls
+        ])
+
+  bWallsBuilding :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (\_ -> 0) <$ eNextTurn
+        , (+1) <$ eBuyWall
+        , undo gameWallsBuilding
+        ])
+
+  bNumSteelSplitters :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (+) <$> bSteelSplittersBuilding <@ eNextTurn
+        , undo gameNumSteelSplitters
+        ])
+
+  bSteelSplittersBuilding :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (\_ -> 0) <$ eNextTurn
+        , (+1) <$ eBuySteelSplitter
+        , undo gameSteelSplittersBuilding
+        ])
+
+  bNumTarsiers :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (+) <$> bTarsiersBuilding <@ eNextTurn
+        , undo gameNumTarsiers
+        ])
+
+  bTarsiersBuilding :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (\_ -> 0) <$ eNextTurn
+        , (+1) <$ eBuyTarsier
+        , undo gameTarsiersBuilding
+        ])
+
+  bNumRhinos :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (+) <$> bRhinosBuilding <@ eNextTurn
+        , undo gameNumRhinos
+        ])
+
+  bRhinosBuilding :: Behavior Int <-
+    accumB 0
+      (unions
+        [ (\_ -> 0) <$ eNextTurn
+        , (+1) <$ eBuyRhino
+        , undo gameRhinosBuilding
+        ])
 
   -- Time-varying entire game state
   bHistory :: Behavior [GameState] <- do
     gs0 <- valueBLater bGameState
-    accumB [gs0] 
+    accumB [gs0]
       (unions
         [ (:) <$> bGameState <@ eNextTurn2
         , tail1 <$ eUndoTurn
         ])
-    -- stepper gs (bGameState <@ eNextTurn2)
-    -- (valueB bGameState0) >>= (flip stepper (bGameState <@ eNextTurn))
 
   let
     bGameState :: Behavior GameState
-    bGameState = pure GameState 
+    bGameState = pure GameState
                   <*> bTurn
-                  <*> bGold 
-                  <*> bNumDrones 
+                  <*> bGold
                   <*> bGreen
                   <*> bGreenRate
                   <*> bBlue
@@ -532,9 +704,28 @@ prismataAssist eInput = mdo
                   <*> bRed
                   <*> bRedRate
                   <*> bEnergy
+                  <*> bNumDrones
                   <*> bNumEngineers
-                  <*> bDronesBuilding
                   <*> bNumConduits
+                  <*> bNumBlastforges
+                  <*> bNumAnimus
+                  <*> bNumForcefields
+                  <*> bNumGaussCannons
+                  <*> bNumWalls
+                  <*> bNumSteelSplitters
+                  <*> bNumTarsiers
+                  <*> bNumRhinos
+                  <*> bDronesBuilding
+                  <*> bEngineersBuilding
+                  <*> bConduitsBuilding
+                  <*> bBlastforgesBuilding
+                  <*> bAnimusBuilding
+                  <*> bForcefieldsBuilding
+                  <*> bGaussCannonsBuilding
+                  <*> bWallsBuilding
+                  <*> bSteelSplittersBuilding
+                  <*> bTarsiersBuilding
+                  <*> bRhinosBuilding
 
   reactimate (fireNextTurn2 <$> eNextTurn)
 
@@ -555,40 +746,63 @@ prismataAssist eInput = mdo
 -------------------------------------------------------------------------------
 
 renderGame :: GameState -> Vty.Image
-renderGame gs = 
-  str ("[[ Turn " ++ show (gameTurn gs) ++ " ]]")
-  +-+
-  str ""
-  +-+ 
-  str "Gold: " +|+ bstr (show (unGold (gameGold gs)))
-  +-+ 
-  str "Green: " +|+ bstr (show (unGreen (gameGreen gs)))
-  +-+ 
-  str "Blue: " +|+ bstr (show (unBlue (gameBlue gs)))
-  +-+ 
-  str "Red: " +|+ bstr (show (unRed (gameRed gs)))
-  +-+ 
-  str "Energy: " +|+ bstr (show (unEnergy (gameEnergy gs)))
+renderGame GameState{..} =
+  str ("[[ Turn " ++ show gameTurn ++ " ]]")
   +-+
   str ""
   +-+
-  str "Drones: " +|+ bstr (show (gameNumDrones gs))
-                 +|+ str (if gameDronesBuilding gs > 0
-                    then
-                      " (+"
-                      ++ show (gameDronesBuilding gs)
-                      ++ ")"
-                    else "")
+  str "Gold: " +|+ bstr (show (unGold gameGold))
   +-+
-  str "Engineers: " +|+ bstr (show (gameNumEngineers gs))
+  str "Green: " +|+ bstr (show (unGreen gameGreen))
   +-+
-  str "Conduits: " +|+ bstr (show (gameNumConduits gs))
+  str "Blue: " +|+ bstr (show (unBlue gameBlue))
+  +-+
+  str "Red: " +|+ bstr (show (unRed gameRed))
+  +-+
+  str "Energy: " +|+ bstr (show (unEnergy gameEnergy))
+  +-+
+  str ""
+  +-+
+  unitImage "Drones: " gameNumDrones gameDronesBuilding
+  +-+
+  unitImage "Engineers: " gameNumEngineers gameEngineersBuilding
+  +-+
+  unitImage' "Conduits: " gameNumConduits gameConduitsBuilding
+  +-+
+  unitImage' "Blastforges: " gameNumBlastforges gameBlastforgesBuilding
+  +-+
+  unitImage' "Animus: " gameNumAnimus gameAnimusBuilding
+  +-+
+  unitImage' "Forcefield: " gameNumForcefields gameForcefieldsBuilding
+  +-+
+  unitImage' "GaussCannon: " gameNumGaussCannons gameGaussCannonsBuilding
+  +-+
+  unitImage' "Wall: " gameNumWalls gameWallsBuilding
+  +-+
+  unitImage' "SteelSplitter: " gameNumSteelSplitters gameSteelSplittersBuilding
+  +-+
+  unitImage' "Tarsier: " gameNumTarsiers gameTarsiersBuilding
+  +-+
+  unitImage' "Rhino: " gameNumRhinos gameRhinosBuilding
  where
   str :: String -> Vty.Image
   str = Vty.string Vty.defAttr
 
   bstr :: String -> Vty.Image
   bstr = Vty.string (Vty.withStyle Vty.defAttr Vty.bold)
+
+  numBuilding :: Int -> Vty.Image
+  numBuilding 0 = emptyImage
+  numBuilding n = str (" (+" ++ show n ++ ")")
+
+  unitImage :: [Char] -> Int -> Int -> Vty.Image
+  unitImage u n b = str u +|+ bstr (show n) +|+ numBuilding b
+
+  unitImage' :: [Char] -> Int -> Int -> Vty.Image
+  unitImage' u n b =
+    if n > 0 || b > 0
+      then unitImage u n b
+      else emptyImage
 
 (+-+) :: Vty.Image -> Vty.Image -> Vty.Image
 (+-+) = (Vty.<->)
@@ -597,9 +811,6 @@ infixr 4 +-+
 (+|+) :: Vty.Image -> Vty.Image -> Vty.Image
 (+|+) = (Vty.<|>)
 infixr 5 +|+
-
-
-
 
 
 
